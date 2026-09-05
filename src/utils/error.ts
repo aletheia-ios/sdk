@@ -10,8 +10,12 @@
  *   and `fetchJSON` throw this for anything outside 2xx, with the status attached.
  * - `parse` - the body was not what the source expected: not JSON, a page list that is
  *   missing, a protector wrapper that was never observed before.
+ * - `outdated` - the package's own precondition no longer holds, so retrying can never
+ *   help and only a newer version can. A signing key the site rotated, a scheme it
+ *   replaced. The app shows "Source Needs Updating" and does not offer a retry. Every
+ *   other code describes something the site did; this one is about the package.
  */
-export type SourceErrorCode = "noPages" | "notFound" | "badResponse" | "parse";
+export type SourceErrorCode = "noPages" | "notFound" | "badResponse" | "parse" | "outdated";
 
 /** What a `SourceError` may carry besides its code and message. */
 export interface SourceErrorOptions {
