@@ -47,7 +47,7 @@
       "includes": ["*.config.ts", "scripts/**", "test/**", "src/**/*.test.ts"],
       "linter": {
         "rules": {
-          "correctness": { "noNodejsModules": "off" },
+          "correctness": { "noNodejsModules": "off", "noUnresolvedImports": "off" },
           "performance": { "noDelete": "off", "useTopLevelRegex": "off" },
           "style": { "noDefaultExport": "off", "noMagicNumbers": "off" }
         }
