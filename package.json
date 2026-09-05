@@ -1,0 +1,64 @@
+{
+  "name": "@aletheia-ios/sdk",
+  "version": "0.1.0",
+  "description": "Contract, host bridge and helpers for writing Aletheia source packages",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aletheia-ios/sdk.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "packageManager": "pnpm@10.16.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "exports": {
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js"
+    },
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "import": "./dist/host.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js"
+    },
+    "./json-schema/*": "./dist/json-schema/*"
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/json-schema.js",
+    "typecheck": "tsc",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run --coverage",
+    "check": "pnpm typecheck && pnpm lint && pnpm build && pnpm test && publint && attw --pack . --profile esm-only",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.5.12",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "5.0.0",
+    "lefthook": "^2.1.12",
+    "publint": "^0.3.24",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
