@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { Index } from "./list";
 
 const ENTRY = {
-  slug: "mangadex",
+  slug: "com.example.mangadex",
   name: "MangaDex",
   version: "1.0.0",
   minAppVersion: "1.4.0",

@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { ContentRating, LanguageCode } from "./enums";
 import { FilterSelection } from "./query";
-import { contractVersion, host, placeholder, semver, slug, templatedURL } from "./scalars";
+import {
+  contractVersion,
+  host,
+  placeholder,
+  semver,
+  slug,
+  supersededSlug,
+  templatedURL,
+} from "./scalars";
 
 /** Validates one `SortOption`. Also the shape of a select setting's options. */
 export const SortOption = z.strictObject({
@@ -100,6 +108,10 @@ export const RateLimit = z
 const manifestShape = z.strictObject({
   $schema: z.string().optional(),
   slug,
+  replaces: z.array(supersededSlug).optional().meta({
+    description:
+      "Slugs this package takes over from, so a rename or a handover reconnects a reader's existing library rows instead of stranding them.",
+  }),
   name: z.string().min(1),
   description: z.string(),
   version: semver,

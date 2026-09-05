@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { SourceManifest } from "./manifest";
 
 const MANIFEST = {
-  slug: "komga",
+  slug: "com.example.komga",
   name: "Komga",
   description: "",
   version: "1.0.0",
@@ -25,6 +25,50 @@ function paths(result: { error?: { issues: { path: PropertyKey[] }[] } }): strin
 test("a manifest templated over a declared setting parses", () => {
   // arrange
   const manifest = MANIFEST;
+
+  // act
+  const result = SourceManifest.safeParse(manifest);
+
+  // assert
+  expect(result.success).toBe(true);
+});
+
+test("a slug must be namespaced, so two publishers cannot claim the same name", () => {
+  // arrange
+  const bare = { ...MANIFEST, slug: "mangadex" };
+  const trailing = { ...MANIFEST, slug: "com.example." };
+  const hyphenEdge = { ...MANIFEST, slug: "com.example.-mangadex" };
+  const hyphenated = { ...MANIFEST, slug: "com.example.weeb-central" };
+
+  // act
+  const results = [bare, trailing, hyphenEdge, hyphenated].map((manifest) =>
+    SourceManifest.safeParse(manifest),
+  );
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, false, false, true]);
+  expect(paths(results[0] as { error?: { issues: { path: PropertyKey[] }[] } })).toContain("slug");
+});
+
+test("a literal host needs two labels, but a placeholder does not", () => {
+  // arrange
+  const single = { ...MANIFEST, hosts: ["com"] };
+  const twoLabels = { ...MANIFEST, hosts: ["example.com"] };
+  const templated = { ...MANIFEST, hosts: ["${serverURL}"] };
+  const prefixed = { ...MANIFEST, hosts: ["${serverURL}.example.com"] };
+
+  // act
+  const results = [single, twoLabels, templated, prefixed].map((manifest) =>
+    SourceManifest.safeParse(manifest),
+  );
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, true, true, true]);
+});
+
+test("replaces accepts the bare slugs a rename supersedes", () => {
+  // arrange
+  const manifest = { ...MANIFEST, replaces: ["mangadex", "com.example.old-mangadex"] };
 
   // act
   const result = SourceManifest.safeParse(manifest);

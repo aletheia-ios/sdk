@@ -190,9 +190,14 @@ validates the files as you type:
 ```json
 {
   "$schema": "./node_modules/@aletheia-ios/sdk/dist/json-schema/source.json",
-  "slug": "mysite"
+  "slug": "com.example.mysite"
 }
 ```
+
+A slug is reverse-DNS and namespaced under a domain you control, because it is a global key:
+a reader's library rows reference it, so two publishers both shipping `mysite` would collide.
+If you rename a package, list what it used to be called in `replaces` so existing rows follow
+it rather than being stranded.
 
 ## A package
 

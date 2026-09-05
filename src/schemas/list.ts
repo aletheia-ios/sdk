@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { ContentRating, LanguageCode } from "./enums";
-import { contractVersion, semver, sha256, slug } from "./scalars";
+import { contractVersion, semver, sha256, slug, supersededSlug } from "./scalars";
 
 /** Validates one `IndexEntry`. */
 export const IndexEntry = z
   .strictObject({
     slug,
+    replaces: z.array(supersededSlug).optional().meta({
+      description:
+        "Advisory copy of the manifest's `replaces`, so a list can explain a slug that vanished from it. Authoritative only in the manifest; never act on this copy.",
+    }),
     name: z.string().min(1),
     version: semver,
     minAppVersion: semver,
@@ -22,6 +26,10 @@ export const IndexEntry = z
         "Relative to the index URL's own base, so a list can be mirrored without editing entries.",
     }),
     iconURL: z.string().min(1).meta({ description: "Relative, as downloadURL." }),
+    builtWith: z.string().min(1).optional().meta({
+      description:
+        "Version of the tool that packed this entry. Two lists disagreeing about one package's sha usually means different toolchains, not tampering.",
+    }),
   })
   .meta({ id: "IndexEntry" });
 
