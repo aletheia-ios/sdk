@@ -3,6 +3,7 @@ import { ContentRating, LanguageCode } from "./enums";
 import { FilterSelection } from "./query";
 import {
   contractVersion,
+  headerName,
   host,
   placeholder,
   semver,
@@ -105,6 +106,32 @@ export const RateLimit = z
   })
   .meta({ id: "RateLimit", description: "Applied by the host on top of its per-host cap." });
 
+/** One kind's headers: names are RFC 7230 tokens, values may use `${settingId}` placeholders. */
+const HeaderMap = z.record(headerName, z.string());
+
+/** Validates the manifest's `headers`: one optional map per request kind. */
+const Headers = z
+  .strictObject({
+    all: HeaderMap.optional().meta({
+      description: "Added to every request kind. A named kind wins over it on the same header.",
+    }),
+    api: HeaderMap.optional().meta({
+      description:
+        "Every request the package makes through the bridge: search, details, chapters, page lists, comments.",
+    }),
+    pages: HeaderMap.optional().meta({
+      description: "Page images in the reader, downloads and the asset store.",
+    }),
+    covers: HeaderMap.optional().meta({
+      description: "Cover art, on any host. The captured login's cookies stay on declared hosts.",
+    }),
+    ping: HeaderMap.optional().meta({ description: "The health badge request." }),
+  })
+  .meta({
+    description:
+      "Extra request headers by kind. Precedence, lowest to highest: app defaults, `all`, the kind, the script's own call headers (api only), the captured login. `Host` and `Content-Length` are refused. Values may use ${settingId}, but a secret setting only in `api` and `ping`: `all`, `pages` and `covers` can reach any host.",
+  });
+
 const manifestShape = z.strictObject({
   $schema: z.string().optional(),
   slug,
@@ -119,7 +146,6 @@ const manifestShape = z.strictObject({
   contractVersion,
   languages: z.array(LanguageCode).min(1),
   baseURL: templatedURL,
-  referer: templatedURL.meta({ description: "Sent on every image and cover fetch." }),
   pingURL: templatedURL.optional().meta({
     description: "Health check target. Defaults to baseURL; a `pingURL()` export overrides both.",
   }),
@@ -127,6 +153,7 @@ const manifestShape = z.strictObject({
     description:
       "The only hosts the script may fetch. Empty is legal for an offline fixture source.",
   }),
+  headers: Headers.optional(),
   rateLimit: RateLimit.optional(),
   contentRating: ContentRating,
   quotableSlug: z.boolean().optional().meta({
@@ -162,22 +189,77 @@ function checkPresets(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   }
 }
 
-/** Every `${id}` in a URL field must name a declared setting. */
+const REFUSED_HEADERS = ["host", "content-length"];
+
+/** Kinds the app does not gate to declared hosts, so they must never carry a secret. */
+const UNGATED_KINDS = ["all", "pages", "covers"];
+
+/** Every header as `[kind, name, value]`. */
+function headerEntries(manifest: ManifestShape): [string, string, string][] {
+  return Object.entries(manifest.headers ?? {}).flatMap(([kind, map]) =>
+    Object.entries(map ?? {}).map(([name, value]): [string, string, string] => [kind, name, value]),
+  );
+}
+
+/**
+ * The app sets `Host` and `Content-Length` itself, so they are refused; two names in one kind
+ * differing only in case would be ambiguous; and a secret setting must not reach a header the
+ * app sends to hosts the package never declared.
+ */
+function checkHeaders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
+  const secretIds = new Set(
+    (manifest.settings ?? []).filter((entry) => entry.type === "secret").map((entry) => entry.id),
+  );
+  const seen = new Set<string>();
+  for (const [kind, name, value] of headerEntries(manifest)) {
+    const path = ["headers", kind, name];
+    const lower = `${kind}:${name.toLowerCase()}`;
+    if (REFUSED_HEADERS.includes(name.toLowerCase())) {
+      ctx.addIssue({
+        code: "custom",
+        message: `header "${name}" is set by the app and cannot be declared`,
+        path,
+      });
+    } else if (seen.has(lower)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `header "${name}" repeats another key that differs only in case`,
+        path,
+      });
+    }
+    seen.add(lower);
+    if (!UNGATED_KINDS.includes(kind)) continue;
+    for (const [, id] of value.matchAll(placeholder)) {
+      if (id !== undefined && secretIds.has(id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `"\${${id}}" is a secret setting; "${kind}" headers can reach any host, so only "api" and "ping" may use it`,
+          path,
+        });
+      }
+    }
+  }
+}
+
+/** Every `${id}` in a URL or header field must name a declared setting. */
 function checkPlaceholders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   const settingIds = new Set((manifest.settings ?? []).map((entry) => entry.id));
-  const templated: [string, string | undefined][] = [
-    ["baseURL", manifest.baseURL],
-    ["referer", manifest.referer],
-    ["pingURL", manifest.pingURL],
-    ...manifest.hosts.map((value, index): [string, string] => [`hosts.${index}`, value]),
+  const templated: [string[], string | undefined][] = [
+    [["baseURL"], manifest.baseURL],
+    [["pingURL"], manifest.pingURL],
+    ...manifest.hosts.map((value, index): [string[], string] => [["hosts", String(index)], value]),
+    ...headerEntries(manifest).map(([kind, name, value]): [string[], string] => [
+      ["headers", kind, name],
+      value,
+    ]),
   ];
-  for (const [field, value] of templated) {
+  for (const [path, value] of templated) {
     for (const [, id] of (value ?? "").matchAll(placeholder)) {
       if (id !== undefined && !settingIds.has(id)) {
         ctx.addIssue({
           code: "custom",
           message: `"\${${id}}" does not name a declared setting`,
-          path: field.split("."),
+          path,
         });
       }
     }
@@ -188,12 +270,13 @@ function checkPlaceholders(manifest: ManifestShape, ctx: z.RefinementCtx): void 
  * Validates `source.json`.
  *
  * Beyond the field shapes: preset ids are unique, a preset's sort names a declared sort
- * option, and every `${placeholder}` in a URL field names a declared setting.
+ * option, and every `${placeholder}` in a URL or header field names a declared setting.
  */
 export const SourceManifest = manifestShape
   .superRefine((manifest, ctx) => {
     checkPresets(manifest, ctx);
     checkPlaceholders(manifest, ctx);
+    checkHeaders(manifest, ctx);
   })
   .meta({
     id: "SourceManifest",

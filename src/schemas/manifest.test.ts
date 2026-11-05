@@ -10,7 +10,6 @@ const MANIFEST = {
   contractVersion: "1.0",
   languages: ["en"],
   baseURL: "${serverURL}",
-  referer: "${serverURL}",
   hosts: ["${serverURL}"],
   contentRating: "mixed",
   sort: { default: "created,desc", options: [{ id: "created,desc", name: "Recent" }] },
@@ -122,4 +121,98 @@ test("a preset whose sort is not a declared option is reported at its path", () 
   // assert
   expect(result.success).toBe(false);
   expect(paths(result)).toEqual(["presets.0.sort"]);
+});
+
+const SECRET = { type: "secret", id: "token", name: "Token" };
+
+function withHeaders(headers: unknown, settings: unknown[] = []) {
+  return SourceManifest.safeParse({
+    ...MANIFEST,
+    settings: [...MANIFEST.settings, ...settings],
+    headers,
+  });
+}
+
+test("a scoped headers map, or none, parses", () => {
+  // arrange
+  const scoped = {
+    all: { "User-Agent": "Aletheia/1.0.1" },
+    pages: { referer: "${serverURL}", origin: "https://example.com" },
+  };
+
+  // act
+  const results = [SourceManifest.safeParse(MANIFEST), withHeaders(scoped)];
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([true, true]);
+});
+
+test("an unknown kind, or a leftover referer field, fails", () => {
+  // arrange
+  const typo = withHeaders({ page: { x: "b" } });
+  const referer = SourceManifest.safeParse({ ...MANIFEST, referer: "https://example.com" });
+
+  // act
+  const results = [typo, referer];
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, false]);
+});
+
+test("Host and Content-Length are refused in any case, at their own path", () => {
+  // arrange
+  const names = ["Host", "HOST", "content-length", "Content-Length"];
+
+  // act
+  const results = names.map((name) => withHeaders({ api: { [name]: "x" } }));
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, false, false, false]);
+  expect(paths(results[1] as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
+    "headers.api.HOST",
+  ]);
+});
+
+test("keys differing only in case fail within a kind but not across kinds", () => {
+  // arrange
+  const duplicate = withHeaders({ all: { "User-Agent": "a", "user-agent": "b" } });
+  const across = withHeaders({ all: { "User-Agent": "a" }, api: { "user-agent": "b" } });
+  const badName = withHeaders({ all: { "bad name": "a" } });
+
+  // act
+  const results = [duplicate, across, badName];
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, true, false]);
+  expect(paths(duplicate as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
+    "headers.all.user-agent",
+  ]);
+});
+
+test("a header placeholder must name a declared setting", () => {
+  // arrange
+  const declared = withHeaders({ pages: { referer: "${serverURL}" } });
+  const undeclared = withHeaders({ pages: { referer: "${missing}" } });
+
+  // act
+  const results = [declared, undeclared];
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([true, false]);
+  expect(paths(undeclared as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
+    "headers.pages.referer",
+  ]);
+});
+
+test("a secret setting reaches api and ping headers only", () => {
+  // arrange
+  const value = { authorization: "Bearer ${token}" };
+
+  // act
+  const results = ["all", "pages", "covers", "api", "ping"].map((kind) =>
+    withHeaders({ [kind]: value }, [SECRET]),
+  );
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, false, false, true, true]);
 });

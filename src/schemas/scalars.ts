@@ -74,3 +74,8 @@ export const host = z
 
 /** A SHA-256 digest as 64 lowercase hex characters. */
 export const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** An HTTP header name: an RFC 7230 token. */
+export const headerName = z
+  .string()
+  .regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, "expected an HTTP header name");
