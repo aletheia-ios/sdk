@@ -3,6 +3,7 @@ import { ContentRating, LanguageCode } from "./enums";
 import { FilterSelection } from "./query";
 import {
   contractVersion,
+  headerName,
   host,
   placeholder,
   semver,
@@ -127,6 +128,10 @@ const manifestShape = z.strictObject({
     description:
       "The only hosts the script may fetch. Empty is legal for an offline fixture source.",
   }),
+  headers: z.record(headerName, z.string()).optional().meta({
+    description:
+      "Extra headers on every request the package makes and on image and cover fetches from its declared hosts. Override the app defaults; a header the script sets itself overrides these; a captured login overrides both. Literal values only, no ${settingId} placeholders. Cookie, Host, Content-Length, Referer and Origin are refused.",
+  }),
   rateLimit: RateLimit.optional(),
   contentRating: ContentRating,
   quotableSlug: z.boolean().optional().meta({
@@ -162,6 +167,30 @@ function checkPresets(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   }
 }
 
+const REFUSED_HEADERS = ["cookie", "host", "content-length", "referer", "origin"];
+
+/** Headers the app owns are refused, and two names differing only in case would be ambiguous. */
+function checkHeaders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
+  const seen = new Set<string>();
+  for (const name of Object.keys(manifest.headers ?? {})) {
+    const lower = name.toLowerCase();
+    if (REFUSED_HEADERS.includes(lower)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `header "${name}" is set by the app and cannot be declared`,
+        path: ["headers", name],
+      });
+    } else if (seen.has(lower)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `header "${name}" repeats another key that differs only in case`,
+        path: ["headers", name],
+      });
+    }
+    seen.add(lower);
+  }
+}
+
 /** Every `${id}` in a URL field must name a declared setting. */
 function checkPlaceholders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   const settingIds = new Set((manifest.settings ?? []).map((entry) => entry.id));
@@ -194,6 +223,7 @@ export const SourceManifest = manifestShape
   .superRefine((manifest, ctx) => {
     checkPresets(manifest, ctx);
     checkPlaceholders(manifest, ctx);
+    checkHeaders(manifest, ctx);
   })
   .meta({
     id: "SourceManifest",

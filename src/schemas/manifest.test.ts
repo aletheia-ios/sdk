@@ -123,3 +123,52 @@ test("a preset whose sort is not a declared option is reported at its path", () 
   expect(result.success).toBe(false);
   expect(paths(result)).toEqual(["presets.0.sort"]);
 });
+
+test("a manifest without headers, or with a valid map, parses", () => {
+  // arrange
+  const valid = { ...MANIFEST, headers: { "User-Agent": "Aletheia/1.0.1", "X-Token": "a" } };
+
+  // act
+  const results = [MANIFEST, valid].map((manifest) => SourceManifest.safeParse(manifest));
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([true, true]);
+});
+
+test("headers the app owns are refused in any case, at their own path", () => {
+  // arrange
+  const names = ["Cookie", "HOST", "content-length", "rEfErer", "Referer", "origin"];
+
+  // act
+  const results = names.map((name) =>
+    SourceManifest.safeParse({ ...MANIFEST, headers: { [name]: "x" } }),
+  );
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
+  expect(paths(results[1] as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
+    "headers.HOST",
+  ]);
+});
+
+test("header keys that differ only in case are rejected, and a non-token name is too", () => {
+  // arrange
+  const duplicate = { ...MANIFEST, headers: { "User-Agent": "a", "user-agent": "b" } };
+  const badName = { ...MANIFEST, headers: { "bad name": "a" } };
+
+  // act
+  const results = [duplicate, badName].map((manifest) => SourceManifest.safeParse(manifest));
+
+  // assert
+  expect(results.map((result) => result.success)).toEqual([false, false]);
+  expect(paths(results[0] as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
+    "headers.user-agent",
+  ]);
+});
