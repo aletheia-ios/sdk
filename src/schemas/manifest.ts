@@ -129,7 +129,7 @@ const Headers = z
   })
   .meta({
     description:
-      "Extra request headers by kind. Precedence, lowest to highest: app defaults, `all`, the kind, the script's own call headers (api only), the captured login. `Host` and `Content-Length` are refused. Values may use ${settingId}, but a secret setting only in `api` and `ping`: `all`, `pages` and `covers` can reach any host.",
+      "Extra request headers by kind. Precedence, lowest to highest: app defaults, `all`, the kind, the script's own call headers (api only), the captured login. Values may use ${settingId}, but a secret setting only in `api` and `ping`: `all`, `pages` and `covers` can reach any host.",
   });
 
 const manifestShape = z.strictObject({
@@ -189,8 +189,6 @@ function checkPresets(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   }
 }
 
-const REFUSED_HEADERS = ["host", "content-length"];
-
 /** Kinds the app does not gate to declared hosts, so they must never carry a secret. */
 const UNGATED_KINDS = ["all", "pages", "covers"];
 
@@ -202,9 +200,8 @@ function headerEntries(manifest: ManifestShape): [string, string, string][] {
 }
 
 /**
- * The app sets `Host` and `Content-Length` itself, so they are refused; two names in one kind
- * differing only in case would be ambiguous; and a secret setting must not reach a header the
- * app sends to hosts the package never declared.
+ * Two names in one kind differing only in case would be ambiguous, and a secret setting must
+ * not reach a header the app sends to hosts the package never declared.
  */
 function checkHeaders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   const secretIds = new Set(
@@ -214,13 +211,7 @@ function checkHeaders(manifest: ManifestShape, ctx: z.RefinementCtx): void {
   for (const [kind, name, value] of headerEntries(manifest)) {
     const path = ["headers", kind, name];
     const lower = `${kind}:${name.toLowerCase()}`;
-    if (REFUSED_HEADERS.includes(name.toLowerCase())) {
-      ctx.addIssue({
-        code: "custom",
-        message: `header "${name}" is set by the app and cannot be declared`,
-        path,
-      });
-    } else if (seen.has(lower)) {
+    if (seen.has(lower)) {
       ctx.addIssue({
         code: "custom",
         message: `header "${name}" repeats another key that differs only in case`,
