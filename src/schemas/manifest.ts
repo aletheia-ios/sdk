@@ -123,7 +123,7 @@ const Headers = z
       description: "Page images in the reader, downloads and the asset store.",
     }),
     covers: HeaderMap.optional().meta({
-      description: "Cover art. Applies on declared hosts only.",
+      description: "Cover art, on any host. The captured login's cookies stay on declared hosts.",
     }),
     ping: HeaderMap.optional().meta({ description: "The health badge request." }),
   })
