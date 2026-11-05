@@ -159,18 +159,15 @@ test("an unknown kind, or a leftover referer field, fails", () => {
   expect(results.map((result) => result.success)).toEqual([false, false]);
 });
 
-test("Host and Content-Length are refused in any case, at their own path", () => {
+test("no header name is refused, Host and Content-Length included", () => {
   // arrange
-  const names = ["Host", "HOST", "content-length", "Content-Length"];
+  const names = ["Host", "HOST", "content-length", "Content-Length", "cookie"];
 
   // act
   const results = names.map((name) => withHeaders({ api: { [name]: "x" } }));
 
   // assert
-  expect(results.map((result) => result.success)).toEqual([false, false, false, false]);
-  expect(paths(results[1] as { error?: { issues: { path: PropertyKey[] }[] } })).toEqual([
-    "headers.api.HOST",
-  ]);
+  expect(results.map((result) => result.success)).toEqual([true, true, true, true, true]);
 });
 
 test("keys differing only in case fail within a kind but not across kinds", () => {
